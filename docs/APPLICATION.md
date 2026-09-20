@@ -1,307 +1,84 @@
-# IronBark Security Solutions — Website
+# Set up the capstone application
 
-**IST 4910 Capstone · Spring 2026 · DOGPARK Group · CSUSB**
-Habib Jahshan · Liam Pearson · Brandon Deane · Danny Hernandez
+The [main README](../README.md) explains the project and its features. This guide covers the database, local configuration, and the included Windows/IIS deployment.
 
----
+## Configure the application
 
-## What this is
+Create a virtual environment and install `requirements.txt`, then copy `.env.example` to the ignored `.env` file. Use your own values:
 
-The production website for IronBark Security Solutions (your fictional
-cybersecurity firm). Built to satisfy every requirement on the capstone rubric:
+| Setting | What to enter |
+| --- | --- |
+| `FLASK_ENV` | `development` for local HTTP testing; leave it empty for deployment. |
+| `FLASK_SECRET_KEY` | A new random value for session signing. |
+| `DB_ENGINE` | `mysql` or `mssql`. |
+| `DB_HOST`, `DB_PORT` | Your database host and port. `localhost` is the local example. |
+| `DB_NAME`, `DB_USER`, `DB_PASSWORD` | The demo database and its application user's credentials. |
+| `UNIVERSITY_AI_API_URL`, `UNIVERSITY_AI_API_KEY`, `UNIVERSITY_AI_MODEL` | Your university or compatible AI provider settings. |
+| `ADMIN_BASIC_USER`, `ADMIN_BASIC_PASS` | Credentials for the restricted submissions endpoint. |
+| `AI_BUDGET_DAILY`, `AI_BUDGET_HOURLY` | Caps on AI requests for this application process. |
 
-- ✅ Real, functional company website (not a placeholder)
-- ✅ Hosted on Windows Server IIS (Web Server VM, `localhost`)
-- ✅ Connected to the Database VM (`localhost`) — products & engagements come from the DB, not hardcoded HTML
-- ✅ Smart Product Catalog (filter, search, AI "Explain for my use case")
-- ✅ AI-Powered Customer Service chatbot (ClaWD, on every page)
-- ✅ Order / Engagement Status lookup with AI-generated summaries
-- ✅ All AI calls routed through the CSUSB University AI API
-- ✅ Bearer token lives in `.env` — never hardcoded, never sent to the browser
-- ✅ Red Team hardening (CSP, CSRF, rate limiting, parameterized SQL, blocked file extensions, hidden segments)
+Generate the session key locally with `python -c "import secrets; print(secrets.token_hex(32))"`, then put it in `.env`. Keep the file out of Git.
 
----
+## Prepare the database
 
-## Repository layout
+Use a new demo database. The schema files drop and recreate the application's tables, so do not run them against data you need to keep.
 
-```
-ironbark/
-├── app.py                      # Flask application (all routes + AI proxy)
-├── web.config                  # IIS configuration (deploy to site root)
-├── requirements.txt            # Python dependencies
-├── .env.example                # Template — copy to .env and fill in
-├── .gitignore
-├── database/
-│   ├── __init__.py
-│   ├── db.py                   # Pluggable DB layer (MySQL or MSSQL)
-│   ├── schema_mysql.sql        # Run on the Database VM (MySQL)
-│   └── schema_mssql.sql        # Run on the Database VM (MSSQL)
-├── docs/
-│   └── PRD.md                  # Product Requirements Document (rubric req.)
-├── static/
-│   ├── css/main.css            # Full design system
-│   └── js/
-│       ├── main.js             # Shared utilities + CSRF helper
-│       ├── chat.js             # AI chatbot widget
-│       ├── catalog.js          # Smart catalog + AI recommend
-│       ├── contact.js          # Contact form
-│       └── status.js           # Engagement lookup
-└── templates/
-    ├── base.html               # Shell (nav, footer, chat widget)
-    ├── index.html              # Homepage
-    ├── catalog.html            # Services / Products / Full catalog
-    ├── about.html              # About + team
-    ├── contact.html            # Contact form
-    ├── status.html             # Engagement status portal
-    └── error.html              # 404 / 500 / 429
+For MySQL/MariaDB, sign in with a database administrator in the MySQL client and run:
+
+```sql
+SOURCE database/schema_mysql.sql;
 ```
 
----
+Run this from the repository root, or give `SOURCE` the full path to the schema file. It creates the `ironbark` database and loads fictional products, services, and engagements.
 
-## Local development (get it running fast)
+Create a separate application user. For a local MySQL installation:
 
-```bash
-# From the project root
-python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-pip install PyMySQL               # or pyodbc if you're on MSSQL
-
-cp .env.example .env
-# Edit .env — put in your real DB creds, AI API URL, AI API key, etc.
-
-# Seed the database (run against the Database VM):
-mysql -h localhost -u root -p ironbark < database/schema_mysql.sql
-#   ...or for MSSQL:
-# sqlcmd -S localhost -U sa -P <pw> -i database/schema_mssql.sql
-
-# Run it
-export FLASK_ENV=development     # Windows: set FLASK_ENV=development
-python app.py
-# -> http://127.0.0.1:8000
-```
-
-Demo engagement codes (for the `/status` page):
-
-| Code | Email |
-|---|---|
-| `IB-2026-0042` | `cto@northridge-mfg.example` |
-| `IB-2026-0051` | `security@ridgelineaero.example` |
-| `IB-2026-0063` | `it@canyonhealthgroup.example` |
-
----
-
-## Database VM setup (localhost)
-
-### MySQL / MariaDB
-
-```bash
-# On the DB VM:
-mysql -u root -p < database/schema_mysql.sql
-
-# Create a least-privilege app user (edit host/password in the SQL):
-mysql -u root -p -e "
-CREATE USER 'ironbark_app'@'localhost' IDENTIFIED BY 'YOUR_STRONG_PASSWORD';
+```sql
+CREATE USER 'ironbark_app'@'localhost' IDENTIFIED BY 'choose-a-new-password';
 GRANT SELECT, INSERT, UPDATE ON ironbark.* TO 'ironbark_app'@'localhost';
-FLUSH PRIVILEGES;"
 ```
 
-Make sure the Database VM's firewall allows **only** the Web Server VM
-(`localhost`) to connect on port 3306. The Red Team should not be able to
-reach the DB directly.
+For separate web and database servers, replace the host restriction with your web server's actual host and allow database traffic only from that server. Enter the application credentials in `.env`; the web app should not use the administrator login.
 
-### Microsoft SQL Server
+For SQL Server, install an appropriate Microsoft ODBC driver and `pyodbc`, run `database/schema_mssql.sql` in SQL Server Management Studio, and create a restricted application login. Set `DB_ENGINE=mssql` and `DB_ODBC_DRIVER` to the installed driver's name.
 
-```cmd
-sqlcmd -S localhost -U sa -P <password> -i database/schema_mssql.sql
-```
+## Start and check the site
 
-Create the app login via SSMS or `CREATE LOGIN` / `CREATE USER` with
-`SELECT, INSERT, UPDATE` on the `ironbark` database only.
+Run `python app.py` and open **http://localhost:8000**.
 
----
+- The catalog should load products from the database and respond to search/filter changes.
+- The contact form should save an inquiry.
+- On `/status`, use `IB-2026-0042` with `cto@northridge-mfg.example`. Both are fictional seed data.
+- With the AI provider configured, try ClaWD, a catalog recommendation, and an engagement summary.
 
-## Production deployment on IIS (Web Server VM, localhost)
+If local forms fail, confirm that `FLASK_ENV=development` is set before starting the app. Secure cookies require HTTPS when that development setting is absent. Database errors usually mean the schema, user privileges, driver, or connection values need attention.
 
-### 1. Install prerequisites on the Web Server VM
+## Deploy with Windows Server and IIS
 
-1. **Python 3.11+** — install to `C:\Python311`, check "Add to PATH"
-2. **IIS with CGI role** — Server Manager → Add Roles → Web Server (IIS) → CGI
-3. **HttpPlatformHandler** — https://www.iis.net/downloads/microsoft/httpplatformhandler
-4. **ODBC Driver 17 for SQL Server** (only if using MSSQL)
+The included `web.config` starts Waitress through IIS HttpPlatformHandler. Its example application directory is `C:\inetpub\ironbark`, with a Python environment named `venv`.
 
-### 2. Deploy the code
+1. Install Python, IIS with its CGI feature, and [HttpPlatformHandler](https://www.iis.net/downloads/microsoft/httpplatformhandler).
+2. Copy the project into your chosen application directory and create a `logs` subdirectory.
+3. Create the environment and install dependencies:
 
 ```powershell
-# Create site directory
-New-Item -ItemType Directory -Path C:\inetpub\ironbark
-New-Item -ItemType Directory -Path C:\inetpub\ironbark\logs
-
-# Copy the entire project to C:\inetpub\ironbark\
-# (use RDP file copy, Git, or a shared folder — just get the files there)
-
-# Create the venv and install packages
 cd C:\inetpub\ironbark
 python -m venv venv
-.\venv\Scripts\activate
-pip install -r requirements.txt
-pip install PyMySQL              # or pyodbc
-```
-
-### 3. Configure `.env`
-
-```powershell
+.\venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 Copy-Item .env.example .env
-notepad .env
 ```
 
-Fill in:
-- `FLASK_SECRET_KEY` → generate with `python -c "import secrets; print(secrets.token_hex(32))"`
-- `DB_*` → point to `localhost` with the `ironbark_app` credentials
-- `UNIVERSITY_AI_API_URL` + `UNIVERSITY_AI_API_KEY` → from your instructor
-- `ADMIN_BASIC_PASS` → a strong password
+4. Fill in `.env` with the deployment's credentials. Leave `FLASK_ENV` empty and configure HTTPS in IIS.
+5. In IIS Manager, create a site pointing at the application directory. Match its binding to your chosen hostname.
+6. Give the application pool identity read access to the project and write access only to its log directory. Restrict access to `.env`.
+7. Check `web.config` paths if you used a different directory or environment name.
+8. Open the site and repeat the checks above. Review the private stdout logs if startup fails.
 
-### 4. Create the IIS site
+The example uses one Waitress process. Request limits and AI budgets are kept in process memory; deployments with multiple processes need a shared store for those limits.
 
-1. Open IIS Manager
-2. Right-click **Sites** → **Add Website**
-3. Site name: `IronBark`
-4. Physical path: `C:\inetpub\ironbark`
-5. Binding: `http`, port `80`, IP `All Unassigned` (or specifically `localhost`)
-6. Click OK
+## Before making a deployment public
 
-### 5. Permissions (important)
+Use HTTPS, new credentials, a restricted database user, and a database firewall rule limited to the web server. Confirm that requests for `.env`, `.git`, source files, and logs are blocked. Check an unauthenticated request to the admin endpoint and verify that it is refused.
 
-The app pool identity (`IIS AppPool\IronBark`) needs:
-- **Read** on `C:\inetpub\ironbark`
-- **Write** on `C:\inetpub\ironbark\logs` (only)
-- **No Write** access anywhere else — especially not to `.env` or `app.py`
-
-```powershell
-icacls C:\inetpub\ironbark /grant "IIS AppPool\IronBark:(OI)(CI)R"
-icacls C:\inetpub\ironbark\logs /grant "IIS AppPool\IronBark:(OI)(CI)M"
-```
-
-### 6. Verify
-
-Browse to `http://localhost/` from inside the VM network. You should see the
-homepage. If not, check `C:\inetpub\ironbark\logs\stdout*.log` for Python
-errors.
-
-### 7. DMZ / internet exposure
-
-Your course setup should already route external traffic through the DMZ
-firewall to `localhost:80`. From the public side, only HTTP (and/or HTTPS)
-should be exposed. Nothing else.
-
----
-
-## Security checklist (Red Team will test these)
-
-- [x] `.env` is readable by the app pool user only, never served by IIS (blocked via `hiddenSegments` + `fileExtensions` in `web.config`)
-- [x] `.py`, `.sql`, `.md`, `.log`, `.config` files return 404 via request filtering
-- [x] All user input is length-capped and sanitized before hitting the DB or AI API
-- [x] Parameterized SQL queries everywhere (no string concatenation)
-- [x] CSRF tokens on every POST endpoint
-- [x] Rate limiting: 20/min on chat, 10/min on AI recommend, 5/min on contact, 15/min on status
-- [x] Session cookies are `HttpOnly`, `Secure`, `SameSite=Lax`
-- [x] Content-Security-Policy restricts scripts to `'self'`
-- [x] `X-Frame-Options: DENY` blocks clickjacking
-- [x] AI bearer token never reaches the browser (all AI calls proxy through `/api/*`)
-- [x] Error pages never leak stack traces
-- [x] DB user has `SELECT, INSERT, UPDATE` only (no DROP, no DDL)
-- [x] `X-Powered-By` header removed
-
-### What you still need to do yourself
-
-- [ ] Put a strong password on the `ironbark_app` DB user
-- [ ] Put a strong `FLASK_SECRET_KEY` and `ADMIN_BASIC_PASS` in `.env`
-- [ ] Lock down the Database VM firewall to accept only `localhost`
-- [ ] Consider adding HTTPS (self-signed is fine for the lab; the instructor may require it)
-- [ ] Change `ADMIN_BASIC_USER` away from `admin`
-
----
-
-## How the AI integration works
-
-The course requires AI-powered features that go through the university AI API.
-Here's the data flow:
-
-```
-Browser  →  POST /api/chat  (with CSRF token, no API keys)
-          Flask looks up bearer token from .env
-          Flask calls CSUSB AI API with Authorization: Bearer <token>
-          Flask returns just the reply text to the browser
-```
-
-The browser **never** sees:
-- The AI API URL
-- The Bearer token
-- The model name
-- The system prompt
-
-If the Red Team pops open DevTools, they'll see `/api/chat` calls with a user
-message and a CSRF token — that's it. Everything sensitive stays server-side.
-
-### The 3 AI features (all proxied through Flask)
-
-| Feature | Endpoint | What it does |
-|---|---|---|
-| Chatbot | `POST /api/chat` | Customer service agent trained to answer questions about IronBark services/products |
-| Smart catalog | `POST /api/ai/recommend` | "Is this product a fit for my company?" — given a slug + free-text context, AI writes a fit analysis |
-| Engagement status | `POST /api/status` | After DB lookup, AI writes a plain-English summary of scan findings and remediation progress |
-
----
-
-## Testing checklist
-
-Before you present:
-
-- [ ] Homepage loads, terminal animation runs, hero reveals stagger in
-- [ ] Services page lists all 3 services from the DB (delete one and confirm it disappears — proves it's live)
-- [ ] Products page lists all 3 products from the DB
-- [ ] Catalog filter (All / Services / Products) works
-- [ ] Catalog search (⌘K or Ctrl+K shortcut) filters in real time
-- [ ] "Explain for my use case" on a catalog card calls the AI and shows a recommendation
-- [ ] Chat widget opens, accepts messages, returns AI responses
-- [ ] Chat bot stays on-topic for IronBark (try asking unrelated questions)
-- [ ] Contact form submits and writes to `contact_submissions` table
-- [ ] Status page looks up `IB-2026-0042 / cto@northridge-mfg.example` and shows AI summary
-- [ ] Status page rejects wrong code or wrong email with generic error (no info leak)
-- [ ] Try `/` in incognito — no session carries over
-- [ ] Try `curl http://localhost/.env` — returns 404
-- [ ] Try `curl http://localhost/app.py` — returns 404
-- [ ] Try `curl http://localhost/database/schema_mysql.sql` — returns 404
-- [ ] DevTools → Network → no API keys visible anywhere
-- [ ] Mobile layout: nav collapses, hero stacks, chat widget works
-
----
-
-## What's in the PRD
-
-`docs/PRD.md` contains the full Product Requirements Document that the rubric
-requires. It covers target audience, feature list, technical stack, UI/UX
-guidelines, security requirements, and the complete database schema. Hand it
-to Cursor/Antigravity with *"build this"* and you should get a working
-skeleton — which is exactly what your course's "good PRD test" wants.
-
----
-
-## Quick troubleshooting
-
-| Symptom | Fix |
-|---|---|
-| `No module named 'pymysql'` | `pip install PyMySQL` (or `pyodbc`) |
-| `Access denied for user 'ironbark_app'` | DB user not created, wrong host in GRANT, or wrong password in `.env` |
-| 500 errors, blank page | Check `C:\inetpub\ironbark\logs\stdout*.log` |
-| AI chat returns 503 | `UNIVERSITY_AI_API_URL` or `_KEY` is wrong in `.env`, or the API is down |
-| `Invalid session token` on form submit | Clear cookies, CSRF expired; refresh the page |
-| Catalog is empty | DB schema not seeded; rerun `schema_mysql.sql` |
-| `.env` is accessible via browser | You forgot to copy `web.config` to site root |
-
----
-
-## License
-
-Built as coursework for IST 4910, CSUSB, Spring 2026. All code MIT-licensed
-for the DOGPARK Group to use, extend, and present.
+These are deployment checks, not a claim that the coursework application has passed a production penetration test.

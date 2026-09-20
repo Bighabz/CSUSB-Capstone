@@ -1,5 +1,5 @@
 -- IronBark Security Solutions — Microsoft SQL Server schema
--- Run on the Database VM (localhost) if using MSSQL
+-- Run on the configured database server if using MSSQL
 
 IF DB_ID('ironbark') IS NULL
     CREATE DATABASE ironbark;

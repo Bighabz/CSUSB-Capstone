@@ -3,7 +3,7 @@ IronBark Security Solutions — Flask application
 IST 4910 Spring 2026, DOGPARK Group, CSUSB
 
 Serves the public website, proxies AI requests to the university AI API,
-reads product/engagement data from the Database VM (localhost),
+reads product/engagement data from the configured database server,
 and logs chat + contact submissions.
 
 Secrets are loaded from .env and NEVER sent to the browser.

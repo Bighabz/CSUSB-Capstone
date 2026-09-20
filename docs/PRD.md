@@ -3,8 +3,8 @@
 **Project:** IronBark corporate website
 **Course:** IST 4910, Spring 2026 — DOGPARK Group
 **Team:** Habib Jahshan, Liam Pearson, Brandon Deane, Danny Hernandez
-**Target deployment:** Windows Server IIS on Web Server VM `localhost`
-**Backend data source:** Database VM `localhost`
+**Target deployment:** Windows Server IIS on the configured web server
+**Backend data source:** the configured database server
 **External AI service:** CSUSB University AI API (Bearer token auth)
 
 ---
@@ -181,7 +181,7 @@ CREATE TABLE chat_logs (
 
 ## 8. Success Criteria
 
-- Site loads at `http://localhost` and from the internet through the DMZ.
+- Site loads at the configured hostname through the lab firewall.
 - Products and services render from the `products` table (kill the DB, the catalog goes empty — proves it's live).
 - Chat widget returns answers from the university AI API within 5s for typical prompts.
 - `/status` resolves a real `engagement_code` and returns both raw data and an AI-written plain-English summary.

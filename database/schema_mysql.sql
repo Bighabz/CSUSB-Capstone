@@ -1,5 +1,5 @@
 -- IronBark Security Solutions — MySQL schema
--- Run on the Database VM (localhost)
+-- Run on the configured database server
 
 CREATE DATABASE IF NOT EXISTS ironbark
   DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
