@@ -243,6 +243,15 @@ def api_catalog():
     return jsonify({"items": rows})
 
 
+def valid_contact_email(value):
+    """Validate the contact form address without ambiguous regex backtracking."""
+    if len(value) > 254 or value.count('@') != 1 or any(c.isspace() for c in value):
+        return False
+    local, _, domain = value.partition('@')
+    domain_name, dot, suffix = domain.rpartition('.')
+    return bool(local and domain_name and dot and suffix)
+
+
 @app.route("/api/contact", methods=["POST"])
 @rate_limit(5)
 def api_contact():
@@ -257,7 +266,7 @@ def api_contact():
 
     if not name or not email or not message:
         return jsonify({"error": "Name, email, and message are required."}), 400
-    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+    if not valid_contact_email(email):
         return jsonify({"error": "That email address doesn't look right."}), 400
 
     db = get_db()
